@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
@@ -51,8 +52,8 @@ func setupConnection(u websocket.Upgrader, conns map[string]Connection) http.Han
 }
 
 type SendMessageBody struct {
-	Author string
-	Content  string
+	Author  string
+	Content string
 }
 
 func broadcast(conns map[string]Connection) http.HandlerFunc {
@@ -88,9 +89,18 @@ func broadcast(conns map[string]Connection) http.HandlerFunc {
 }
 
 func main() {
-	log.Print("[gochatter-ws] starting up GoChatter Websocket Server on port 8443")
+	log.Print("[gochatter-ws] starting up GoChatter Websocket Server on port 8444")
 	mux := setupRoutes()
-	log.Fatal(http.ListenAndServe(":8444", mux))
+	root, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Fatal(http.ListenAndServeTLS(
+		":8444",
+		filepath.Join(root, ".credentials", "cert.pem"),
+		filepath.Join(root, ".credentials", "key.pem"),
+	mux))
 }
 
 func createClient() {
