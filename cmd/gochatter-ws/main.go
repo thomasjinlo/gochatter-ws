@@ -95,28 +95,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Printf("[gochatter-ws] root path %s", root)
 
 	log.Fatal(http.ListenAndServeTLS(
 		":8444",
 		filepath.Join(root, ".credentials", "cert.pem"),
 		filepath.Join(root, ".credentials", "key.pem"),
-	mux))
-}
-
-func createClient() {
-	c, _, err := websocket.DefaultDialer.Dial("ws://localhost:8443/connect", nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	defer c.Close()
-
-	scanner := bufio.NewScanner(os.Stdin)
-
-	for {
-		fmt.Println("Enter message to WS: ")
-		scanner.Scan()
-		input := scanner.Text()
-		c.WriteMessage(websocket.TextMessage, []byte(input))
-	}
+		mux))
 }
