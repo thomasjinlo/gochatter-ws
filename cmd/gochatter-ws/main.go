@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
@@ -103,7 +102,7 @@ func setupConnection(u websocket.Upgrader, conns map[string]*Connection) http.Ha
 		conns[conn.clientId] = conn
 
 		log.Printf("[gochatter-ws] setting up connection for client %v to host %v", conn.clientId, hostIp)
-		if err = rc.Set(ctx, conn.clientId, hostIp, 100*time.Millisecond).Err(); err != nil {
+		if err = rc.Set(ctx, conn.clientId, hostIp, 0).Err(); err != nil {
 			log.Printf("[gochatter-ws] error setting redis %v", err)
 		}
 	}
