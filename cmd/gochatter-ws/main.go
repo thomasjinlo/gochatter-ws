@@ -101,7 +101,11 @@ func setupConnection(u websocket.Upgrader, conns map[string]*Connection) http.Ha
 			conn:     c,
 		}
 		conns[conn.clientId] = conn
-		rc.Set(ctx, conn.clientId, hostIp, 100*time.Millisecond)
+
+		log.Printf("[gochatter-ws] setting up connection for client %v to host %v", conn.clientId, hostIp)
+		if err = rc.Set(ctx, conn.clientId, hostIp, 100*time.Millisecond).Err(); err != nil {
+			log.Printf("[gochatter-ws] error setting redis %v", err)
+		}
 	}
 }
 
