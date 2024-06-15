@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -29,9 +30,42 @@ func setupRoutes() *chi.Mux {
 		w.WriteHeader(http.StatusOK)
 	})
 	r.Get("/connect", setupConnection(upgrader, connections))
-	r.Post("/send_message", broadcast(connections))
+	r.Post("/broadcast", broadcast(connections))
+	r.Post("/direct_message", sendDirectMessage(connections))
 
 	return r
+}
+
+type DirectMessageBody struct {
+	AccountId string
+	Content   string
+}
+
+func sendDirectMessage(conns map[string]Connection) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		log.Print("[gochatter-ws] sending direct message")
+		ct := r.Header.Get("Content-Type")
+		if ct != "application/json" {
+			msg := fmt.Sprintf("invalid content type %s, expected \"application/json\"", ct)
+			http.Error(w, msg, http.StatusUnsupportedMediaType)
+			return
+		}
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		var dm DirectMessageBody
+		if err := json.Unmarshal(b, &dm); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if c, ok := conns[dm.AccountId]; ok {
+			c.conn.WriteJSON([]byte(dm.Content))
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}
 }
 
 func setupConnection(u websocket.Upgrader, conns map[string]Connection) http.HandlerFunc {
