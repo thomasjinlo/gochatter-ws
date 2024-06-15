@@ -1,17 +1,21 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
+	"github.com/redis/go-redis/v9"
 )
 
 type Connection struct {
@@ -69,6 +73,23 @@ func sendDirectMessage(conns map[string]Connection) http.HandlerFunc {
 }
 
 func setupConnection(u websocket.Upgrader, conns map[string]Connection) http.HandlerFunc {
+	ctx := context.Background()
+	rc := redis.NewClient(&redis.Options{
+		Addr:     "redis:6379",
+		Password: "",
+		DB:       0,
+	})
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.Fatalf("[gochatter-ws] failed to retrieve hostname: %v", err)
+	}
+	ipAddr, err := net.ResolveIPAddr("ip", hostname)
+	if err != nil {
+		log.Fatalf("[gochatter-ws] failed to retrieve host ip: %v", err)
+	}
+	hostIp := ipAddr.IP.String()
+	log.Printf("[gochatter-ws] serving on host ip: %v", hostIp)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[gochatter-ws] setting up connection for client %v", r.RemoteAddr)
 		c, err := u.Upgrade(w, r, nil)
@@ -80,6 +101,7 @@ func setupConnection(u websocket.Upgrader, conns map[string]Connection) http.Han
 			conn:     c,
 		}
 		conns[conn.clientId] = conn
+		rc.Set(ctx, conn.clientId, hostIp, 100*time.Millisecond)
 	}
 }
 
