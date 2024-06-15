@@ -24,7 +24,7 @@ type Connection struct {
 }
 
 func setupRoutes() *chi.Mux {
-	connections := make(map[string]Connection)
+	connections := make(map[string]*Connection)
 	upgrader := websocket.Upgrader{}
 
 	r := chi.NewRouter()
@@ -45,7 +45,7 @@ type DirectMessageBody struct {
 	Content   string
 }
 
-func sendDirectMessage(conns map[string]Connection) http.HandlerFunc {
+func sendDirectMessage(conns map[string]*Connection) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Print("[gochatter-ws] sending direct message")
 		ct := r.Header.Get("Content-Type")
@@ -72,7 +72,7 @@ func sendDirectMessage(conns map[string]Connection) http.HandlerFunc {
 	}
 }
 
-func setupConnection(u websocket.Upgrader, conns map[string]Connection) http.HandlerFunc {
+func setupConnection(u websocket.Upgrader, conns map[string]*Connection) http.HandlerFunc {
 	ctx := context.Background()
 	rc := redis.NewClient(&redis.Options{
 		Addr:     "redis:6379",
@@ -96,7 +96,7 @@ func setupConnection(u websocket.Upgrader, conns map[string]Connection) http.Han
 		if err != nil {
 			log.Fatal(err)
 		}
-		conn := Connection{
+		conn := &Connection{
 			clientId: c.RemoteAddr().String(),
 			conn:     c,
 		}
@@ -110,7 +110,7 @@ type SendMessageBody struct {
 	Content string
 }
 
-func broadcast(conns map[string]Connection) http.HandlerFunc {
+func broadcast(conns map[string]*Connection) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Print("[gochatter-ws] broadcasting message")
 		b, err := io.ReadAll(r.Body)
