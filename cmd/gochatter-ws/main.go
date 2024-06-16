@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gochatter-ws/internal/connection"
+	"gochatter-ws/internal/message"
 	"io"
 	"log"
 	"net"
@@ -18,11 +20,12 @@ import (
 )
 
 type Connection struct {
-	clientId string
-	conn     *websocket.Conn
+	accountId string
+	clientId  string
+	conn      *websocket.Conn
 }
 
-func setupRoutes() *chi.Mux {
+func setupRoutes(handle *message.Handle) *chi.Mux {
 	connections := make(map[string]*Connection)
 	upgrader := websocket.Upgrader{}
 
@@ -34,7 +37,10 @@ func setupRoutes() *chi.Mux {
 	})
 	r.Get("/connect", setupConnection(upgrader, connections))
 	r.Post("/broadcast", broadcast(connections))
-	r.Post("/direct_message", sendDirectMessage(connections))
+	// r.Post("/direct_message", sendDirectMessage(connections))
+
+	r.Get("/connect", handle.Connect)
+	r.Post("/direct_message", handle.DirectMessage)
 
 	return r
 }
@@ -71,6 +77,10 @@ func sendDirectMessage(conns map[string]*Connection) http.HandlerFunc {
 	}
 }
 
+type ConnectBody struct {
+	AccountId string
+}
+
 func setupConnection(u websocket.Upgrader, conns map[string]*Connection) http.HandlerFunc {
 	ctx := context.Background()
 	rc := redis.NewClient(&redis.Options{
@@ -95,15 +105,37 @@ func setupConnection(u websocket.Upgrader, conns map[string]*Connection) http.Ha
 		if err != nil {
 			log.Fatal(err)
 		}
-		conn := &Connection{
-			clientId: c.RemoteAddr().String(),
-			conn:     c,
+		defer c.Close()
+		var cb ConnectBody
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "error reading body", http.StatusInternalServerError)
+			return
 		}
-		conns[conn.clientId] = conn
+		if err = json.Unmarshal(b, &cb); err != nil {
+			http.Error(w, "error parsing body", http.StatusBadRequest)
+			return
+		}
+		conn := &Connection{
+			accountId: cb.AccountId,
+			clientId:  c.RemoteAddr().String(),
+			conn:      c,
+		}
+		conns[cb.AccountId] = conn
 
 		log.Printf("[gochatter-ws] setting up connection for client %v to host %v", conn.clientId, hostIp)
 		if err = rc.Set(ctx, conn.clientId, hostIp, 0).Err(); err != nil {
 			log.Printf("[gochatter-ws] error setting redis %v", err)
+		}
+
+		for {
+			_, _, err := conn.conn.ReadMessage()
+			if err != nil {
+				log.Printf("[gochatter-ws] client connection closed for account %s and client ip %s", conn.accountId, conn.clientId)
+				rc.Del(ctx, conn.clientId)
+				delete(conns, conn.accountId)
+				break
+			}
 		}
 	}
 }
@@ -147,7 +179,26 @@ func broadcast(conns map[string]*Connection) http.HandlerFunc {
 
 func main() {
 	log.Print("[gochatter-ws] starting up GoChatter Websocket Server on port 8444")
-	mux := setupRoutes()
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.Fatalf("[gochatter-ws] failed to retrieve hostname: %v", err)
+	}
+	ipAddr, err := net.ResolveIPAddr("ip", hostname)
+	if err != nil {
+		log.Fatalf("[gochatter-ws] failed to retrieve host ip: %v", err)
+	}
+	hostIp := ipAddr.IP.String()
+	log.Printf("[gochatter-ws] serving on host ip: %v", hostIp)
+	rc := redis.NewClient(&redis.Options{
+		Addr:     "redis:6379",
+		Password: "",
+		DB:       0,
+	})
+	cm := connection.NewManager()
+	service := message.NewService(rc, cm, hostIp)
+	upgrader := websocket.Upgrader{}
+	handle := message.NewHandle(service, &upgrader)
+	mux := setupRoutes(handle)
 	root, err := os.Getwd()
 	if err != nil {
 		log.Fatal(err)
