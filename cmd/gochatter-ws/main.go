@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -203,11 +204,31 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("[gochatter-ws] root path %s", root)
 
-	log.Fatal(http.ListenAndServeTLS(
-		":8444",
+	publicCert, err := tls.LoadX509KeyPair(
 		filepath.Join(root, ".credentials", "cert.pem"),
 		filepath.Join(root, ".credentials", "key.pem"),
-		mux))
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	privateCert, err := tls.LoadX509KeyPair(
+		filepath.Join(root, ".credentials", "private-cert.pem"),
+		filepath.Join(root, ".credentials", "private-key.pem"),
+	)
+	getCertificate := func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		switch info.ServerName {
+		case "gochatter.app":
+			return &publicCert, nil
+		default:
+			return &privateCert, nil
+		}
+	}
+	config := &tls.Config{GetCertificate: getCertificate}
+	server := &http.Server{
+		Addr:      ":8444",
+		TLSConfig: config,
+		Handler:   mux,
+	}
+	log.Fatal(server.ListenAndServeTLS("", ""))
 }
