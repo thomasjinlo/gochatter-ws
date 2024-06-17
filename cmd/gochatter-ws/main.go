@@ -196,7 +196,7 @@ func main() {
 		DB:       0,
 	})
 	cm := connection.NewManager()
-	service := message.NewService(rc, cm, hostIp)
+	service := message.NewService(rc, cm, hostname)
 	upgrader := websocket.Upgrader{}
 	handle := message.NewHandle(service, &upgrader)
 	mux := setupRoutes(handle)
