@@ -28,7 +28,7 @@ type Connection struct {
 
 func setupRoutes(handle *message.Handle) *chi.Mux {
 	connections := make(map[string]*Connection)
-	upgrader := websocket.Upgrader{}
+	//upgrader := websocket.Upgrader{}
 
 	r := chi.NewRouter()
 	r.Get("/hello", func(w http.ResponseWriter, r *http.Request) {
@@ -36,7 +36,7 @@ func setupRoutes(handle *message.Handle) *chi.Mux {
 		w.Write([]byte("Hello, World!"))
 		w.WriteHeader(http.StatusOK)
 	})
-	r.Get("/connect", setupConnection(upgrader, connections))
+	// r.Get("/connect", setupConnection(upgrader, connections))
 	r.Post("/broadcast", broadcast(connections))
 	// r.Post("/direct_message", sendDirectMessage(connections))
 
@@ -97,8 +97,8 @@ func setupConnection(u websocket.Upgrader, conns map[string]*Connection) http.Ha
 	if err != nil {
 		log.Fatalf("[gochatter-ws] failed to retrieve host ip: %v", err)
 	}
-	hostIp := ipAddr.IP.String()
-	log.Printf("[gochatter-ws] serving on host ip: %v", hostIp)
+	hostip := ipAddr.IP.String()
+	log.Printf("[gochatter-ws] serving on host ip: %v", hostip)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[gochatter-ws] setting up connection for client %v", r.RemoteAddr)
@@ -124,8 +124,8 @@ func setupConnection(u websocket.Upgrader, conns map[string]*Connection) http.Ha
 		}
 		conns[cb.AccountId] = conn
 
-		log.Printf("[gochatter-ws] setting up connection for client %v to host %v", conn.clientId, hostIp)
-		if err = rc.Set(ctx, conn.clientId, hostIp, 0).Err(); err != nil {
+		log.Printf("[gochatter-ws] setting up connection for client %v to host %v", conn.clientId, hostip)
+		if err = rc.Set(ctx, conn.clientId, hostip, 0).Err(); err != nil {
 			log.Printf("[gochatter-ws] error setting redis %v", err)
 		}
 
@@ -184,19 +184,20 @@ func main() {
 	if err != nil {
 		log.Fatalf("[gochatter-ws] failed to retrieve hostname: %v", err)
 	}
+	log.Printf("[gochatter-ws] hostname is: %s", hostname)
 	ipAddr, err := net.ResolveIPAddr("ip", hostname)
 	if err != nil {
 		log.Fatalf("[gochatter-ws] failed to retrieve host ip: %v", err)
 	}
-	hostIp := ipAddr.IP.String()
-	log.Printf("[gochatter-ws] serving on host ip: %v", hostIp)
+	hostip := ipAddr.IP.String()
+	log.Printf("[gochatter-ws] serving on host ip: %v", hostip)
 	rc := redis.NewClient(&redis.Options{
 		Addr:     "redis:6379",
 		Password: "",
 		DB:       0,
 	})
 	cm := connection.NewManager()
-	service := message.NewService(rc, cm, hostIp)
+	service := message.NewService(rc, cm, hostip, hostname)
 	upgrader := websocket.Upgrader{}
 	handle := message.NewHandle(service, &upgrader)
 	mux := setupRoutes(handle)

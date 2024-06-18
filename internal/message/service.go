@@ -11,16 +11,18 @@ import (
 )
 
 type Service struct {
-	hostIp string
-	rc     *redis.Client
-	cm     *connection.Manager
+	hostname string
+	hostip   string
+	rc       *redis.Client
+	cm       *connection.Manager
 }
 
-func NewService(rc *redis.Client, cm *connection.Manager, hostIp string) *Service {
+func NewService(rc *redis.Client, cm *connection.Manager, hostip, hostname string) *Service {
 	return &Service{
-		rc:     rc,
-		cm:     cm,
-		hostIp: hostIp,
+		rc:       rc,
+		cm:       cm,
+		hostip:   hostip,
+		hostname: hostname,
 	}
 }
 
@@ -45,7 +47,7 @@ func (s *Service) DirectMessage(dm DirectMessageRequest) {
 func (s *Service) SetupConnection(accountId string, conn *websocket.Conn) error {
 	ctx := context.Background()
 	if !s.cm.HasConnections(accountId) {
-		err := s.rc.SAdd(ctx, accountId, s.hostIp).Err()
+		err := s.rc.SAdd(ctx, accountId, s.hostname).Err()
 		if err != nil {
 			return err
 		}
@@ -60,7 +62,7 @@ func (s *Service) SetupConnection(accountId string, conn *websocket.Conn) error 
 		}
 		s.cm.RemoveConnection(accountId, conn)
 		if !s.cm.HasConnections(accountId) {
-			if err := s.rc.SRem(ctx, accountId, s.hostIp).Err(); err != nil {
+			if err := s.rc.SRem(ctx, accountId, s.hostname).Err(); err != nil {
 				slog.Info(fmt.Sprintf("error while removing account/hostip mapping: %v", err))
 			}
 		}
