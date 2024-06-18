@@ -2,116 +2,23 @@ package main
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
 	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"gochatter-ws/internal/connection"
 	"gochatter-ws/internal/message"
 	"io"
 	"log"
-	"math/big"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
 )
-
-func generateKey() {
-	rootPath, _ := os.Getwd()
-	hostname, _ := os.Hostname()
-	hostip, _ := net.ResolveIPAddr("ip", hostname)
-	// Generate a new private key
-	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		log.Fatalf("Failed to generate private key: %v", err)
-	}
-
-	// Load existing Root CA private key and certificate
-	rootCAPrivKeyFile, err := os.ReadFile(filepath.Join(rootPath, ".credentials", "root-key.pem"))
-	if err != nil {
-		log.Fatalf("Failed to read Root CA private key file: %v", err)
-	}
-
-	rootCACertFile, err := os.ReadFile(filepath.Join(rootPath, ".credentials", "root-cert.pem"))
-	if err != nil {
-		log.Fatalf("Failed to read Root CA certificate file: %v", err)
-	}
-
-	// Parse PEM encoded Root CA private key
-	rootCAPrivKeyBlock, _ := pem.Decode(rootCAPrivKeyFile)
-	if rootCAPrivKeyBlock == nil {
-		log.Fatalf("Failed to decode PEM block containing Root CA private key")
-	}
-
-	rootCAPrivKey, err := x509.ParsePKCS8PrivateKey(rootCAPrivKeyBlock.Bytes)
-	if err != nil {
-		log.Fatalf("Failed to parse Root CA private key: %v", err)
-	}
-
-	// Parse PEM encoded Root CA certificate
-	rootCACertBlock, _ := pem.Decode(rootCACertFile)
-	if rootCACertBlock == nil {
-		log.Fatalf("Failed to decode PEM block containing Root CA certificate")
-	}
-
-	rootCACert, err := x509.ParseCertificate(rootCACertBlock.Bytes)
-	if err != nil {
-		log.Fatalf("Failed to parse Root CA certificate: %v", err)
-	}
-
-	// Define the server certificate template
-	serverTemplate := x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		Subject: pkix.Name{
-			Country:            []string{"US"},
-			Organization:       []string{"GoChatter"},
-			OrganizationalUnit: []string{"Push Server"},
-			CommonName:         "gochatter-ws",
-		},
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
-		IPAddresses:           []net.IP{hostip.IP},
-		DNSNames:              []string{hostname},
-		BasicConstraintsValid: true,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-	}
-
-	// Create a self-signed server certificate
-	serverCertDER, err := x509.CreateCertificate(rand.Reader, &serverTemplate, rootCACert, privateKey.Public(), rootCAPrivKey)
-	if err != nil {
-		log.Fatalf("Failed to create server certificate: %v", err)
-	}
-
-	// Encode and write the private key to a file
-	privKeyFile, err := os.Create(filepath.Join(rootPath, ".credentials", "private.key"))
-	if err != nil {
-		log.Fatalf("Failed to create private key file: %v", err)
-	}
-	defer privKeyFile.Close()
-	privKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privateKey})
-	privKeyFile.Write(privKeyPEM)
-
-	// Encode and write the certificate to a file
-	certFile, err := os.Create(filepath.Join(rootPath, ".credentials", "private.crt"))
-	if err != nil {
-		log.Fatalf("Failed to create certificate file: %v", err)
-	}
-	defer certFile.Close()
-	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: serverCertDER})
-	certFile.Write(certPEM)
-}
 
 type Connection struct {
 	accountId string
@@ -305,10 +212,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	generateKey()
 	privateCert, err := tls.LoadX509KeyPair(
-		filepath.Join(root, ".credentials", "private.crt"),
-		filepath.Join(root, ".credentials", "private.key"),
+		filepath.Join(root, ".credentials", "ws-cert.pem"),
+		filepath.Join(root, ".credentials", "ws-cert.key"),
 	)
 	getCertificate := func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 		switch info.ServerName {
