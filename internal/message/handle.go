@@ -30,7 +30,7 @@ type DirectMessageRequest struct {
 }
 
 func (h *Handle) DirectMessage(w http.ResponseWriter, r *http.Request) {
-	slog.Info("handling direct message")
+	log.Printf("handling direct message")
 	ct := r.Header.Get("Content-Type")
 	if ct != "application/json" {
 		msg := fmt.Sprintf("invalid content type %s, expected \"application/json\"", ct)
