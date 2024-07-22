@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"gochatter-ws/internal/gochatterclient"
 	"io"
 	"log"
 	"net/http"
@@ -12,7 +11,12 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func SetupRoutes(cm *gochatterclient.Manager) *chi.Mux {
+type ConnectionManager interface {
+	SetupConnection(conn *websocket.Conn, clientId string) error
+	SendDirectMessage(sourceClientId, targetClientId, msg string) error
+}
+
+func SetupRoutes(cm ConnectionManager) *chi.Mux {
 	u := &websocket.Upgrader{}
 	r := chi.NewRouter()
 	r.Use(loggingMiddleware)
@@ -36,7 +40,7 @@ func handleHello() http.HandlerFunc {
 	}
 }
 
-func handleConnect(cm *gochatterclient.Manager, u *websocket.Upgrader) http.HandlerFunc {
+func handleConnect(cm ConnectionManager, u *websocket.Upgrader) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		conn, err := u.Upgrade(w, r, nil)
 		if err != nil {
@@ -61,7 +65,7 @@ type DirectMessageRequest struct {
 	Content         string
 }
 
-func handleDirectMessage(cm *gochatterclient.Manager) http.HandlerFunc {
+func handleDirectMessage(cm ConnectionManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ct := r.Header.Get("Content-Type")
 		if ct != "application/json" {
